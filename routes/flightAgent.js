@@ -1,6 +1,7 @@
 // backend/routes/flightAgent.js
 import express from "express";
 import Amadeus from "amadeus";
+hostname: "api.amadeus.com"
 
 const router = express.Router();
 
