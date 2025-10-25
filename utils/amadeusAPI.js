@@ -1,7 +1,7 @@
 import Amadeus from "amadeus";
 const amadeus = new Amadeus({
-  clientId: process.env.YAyjEbnpGRLtfdN7QcGogMzok0IK4ins,
-  clientSecret: process.env.xaj8Sktep8QTYdzL,
+  clientId: process.env.AMADEUS_CLIENT_ID,
+  clientSecret: process.env.AMADEUS_CLIENT_SECRET,
 });
 export async function searchFlights(from, to, departure, ret, passengers, travelClass = "ECONOMY") {
   try {
