@@ -7,31 +7,47 @@ dotenv.config();
 
 const app = express();
 
-// ✅ Allow only your frontend domain
+// ✅ Allowed frontend origins
 const allowedOrigins = [
-  "https://flypointwise.com",      // your live frontend
-  "http://localhost:3000",         // for local dev (optional)
-  "http://localhost:3001"          // backend local
+  "https://flypointwise.com",
+  "http://localhost:3000",
+  "http://localhost:3001"
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS blocked: " + origin));
-    }
-  },
-  credentials: true,
-}));
+// ✅ Configure CORS properly
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn("❌ Blocked by CORS:", origin);
+        callback(new Error("CORS blocked for origin: " + origin));
+      }
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
 
+// ✅ Explicitly handle preflight OPTIONS requests
+app.options("*", cors());
+
+// ✅ Middleware
 app.use(express.json());
 
-// Test route
-app.get("/", (req, res) => res.send("✈️ FlyPointWise API is running"));
+// ✅ Root test endpoint
+app.get("/", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "https://flypointwise.com");
+  res.send("✈️ FlyPointWise API is running");
+});
 
-// Main route
+// ✅ Flight agent route
 app.use("/api/flight-agent", flightAgentRoute);
 
+// ✅ Start server
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
