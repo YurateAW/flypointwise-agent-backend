@@ -1,55 +1,81 @@
 // backend/routes/flightAgent.js
 import express from "express";
-import { amexTransferPrograms } from "../utils/amexPartners.js";
+import Amadeus from "amadeus";
 
 const router = express.Router();
 
+// 🔑 Initialize Amadeus client (Production)
+const amadeus = new Amadeus({
+  clientId: process.env.AMADEUS_CLIENT_ID,
+  clientSecret: process.env.AMADEUS_CLIENT_SECRET,
+});
+
 router.post("/", async (req, res) => {
   try {
-    const { from, to, departure, passengers, travelClass } = req.body;
-    if (!from || !to || !departure)
+    const { from, to, departure, return: returnDate, passengers, travelClass } = req.body;
+
+    if (!from || !to || !departure) {
       return res.status(400).json({ error: "Missing required parameters" });
+    }
 
-    // Mock flight data (replace with real Amadeus later)
-    const flights = [
-      { airline: "Lufthansa", route: `${from}-${to}`, cabin: travelClass, cash_price: 189 },
-      { airline: "British Airways", route: `${from}-${to}`, cabin: travelClass, cash_price: 175 },
-      { airline: "Swiss", route: `${from}-${to}`, cabin: travelClass, cash_price: 205 },
-    ];
+    // 🛫 Build query for Amadeus API
+    const params = {
+      originLocationCode: from.toUpperCase(),
+      destinationLocationCode: to.toUpperCase(),
+      departureDate: departure,
+      adults: passengers || 1,
+      currencyCode: "EUR",
+      max: 30, // get more results, we’ll sort later
+    };
 
-    // For each flight, find best loyalty program option
-    const results = flights.map((f) => {
-      const options = amexTransferPrograms.map((p) => {
-      const euroPerMile = Number(p.value_eur) || 0.012;        // default value
-      const ratio = Number(p.ratio) || 1;                      // ensure numeric
-      const requiredMiles = Math.round(f.cash_price / euroPerMile);
-      const requiredAmexPoints = Math.round(requiredMiles * ratio);
-      const effectiveValue = requiredAmexPoints > 0 ? (f.cash_price / requiredAmexPoints) : 0;
-    
+    if (returnDate) params.returnDate = returnDate;
+    if (travelClass && travelClass !== "BOTH") params.travelClass = travelClass.toUpperCase();
+
+    // 🔍 Fetch live flight offers
+    const response = await amadeus.shopping.flightOffersSearch.get(params);
+
+    // 🧮 Parse and sort by price & duration
+    const offers = response.data.map((offer) => {
+      const price = parseFloat(offer.price.total);
+      const itineraries = offer.itineraries.map((it) => {
+        const duration = it.duration.replace("PT", "");
+        return { duration, segments: it.segments.length };
+      });
+
+      // Combine total duration (hours+minutes)
+      const totalDuration = offer.itineraries
+        .map((it) => it.duration.replace(/[A-Z]/g, ":").replace("P", "").replace("T", ""))
+        .join(" / ");
+
+      const outbound = offer.itineraries[0];
+      const airline = outbound.segments[0].carrierCode;
+      const stops = outbound.segments.length - 1;
+
       return {
-        name: p.program,
-        ratio_display: `${(ratio).toFixed(2)}:1`,
-        required_points: requiredAmexPoints,
-        taxes: 95,
-        effective_value: effectiveValue,
+        airline,
+        price,
+        duration: totalDuration,
+        stops,
+        cabin: offer.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.cabin || "Unknown",
       };
     });
 
-      // Sort best (lowest effective_value)
-      const best = options.sort((a, b) => b.effective_value - a.effective_value)[0];
-
-      return {
-        ...f,
-        best_program: best,
-        recommendation: `Best value via ${best.name} (${best.ratio}) – ` +
-          `${best.required_points.toLocaleString()} points + €${best.taxes} taxes`,
-      };
+    // Sort by lowest price, then duration
+    const sorted = offers.sort((a, b) => {
+      if (a.price !== b.price) return a.price - b.price;
+      return a.duration.localeCompare(b.duration);
     });
 
-    res.json(results);
+    // Limit to top 10
+    const top10 = sorted.slice(0, 10);
+
+    res.json(top10);
   } catch (err) {
-    console.error("❌ Flight agent route error:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("❌ Amadeus API error:", err.response?.result || err);
+    res.status(500).json({
+      error: "Failed to fetch flights from Amadeus",
+      details: err.description || err.message,
+    });
   }
 });
 
