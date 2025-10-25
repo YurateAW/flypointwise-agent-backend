@@ -4,7 +4,7 @@ import { amexTransferPrograms } from "./amexPartners.js";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 export async function analyzeWithOpenAI(flights, travelClass) {
   const enrichedFlights = flights.map(flight => ({ ...flight, amex_programs: estimateMilesOptions(flight) }));
-  const prompt = \`
+  const prompt = `
 You are a travel optimization assistant for an American Express Platinum user.
 Compare paying cash vs transferring Amex points to partner programs:
 \${amexTransferPrograms.map(p => \`• \${p.program}: \${p.ratio} (\${p.alliance})\`).join("\\n")}
