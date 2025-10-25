@@ -1,51 +1,49 @@
 // backend/routes/flightAgent.js
 import express from "express";
-import { analyzeWithOpenAI } from "../utils/openaiAgent.js";
+import { amexTransferPrograms } from "../utils/amexPartners.js";
 
 const router = express.Router();
 
-// 🛫 Main endpoint: POST /api/flight-agent
 router.post("/", async (req, res) => {
   try {
     const { from, to, departure, passengers, travelClass } = req.body;
+    if (!from || !to || !departure)
+      return res.status(400).json({ error: "Missing required parameters" });
 
-    // ✅ Validate input
-    if (!from || !to || !departure) {
-      return res.status(400).json({ error: "Missing required parameters: from, to, departure" });
-    }
-
-    // ✈️ Mock data — replace with real Amadeus API integration later
+    // Mock flight data (replace with real Amadeus later)
     const flights = [
-      {
-        airline: "Lufthansa",
-        route: `${from}-${to}`,
-        cabin: travelClass,
-        cash_price: 189.0,
-      },
-      {
-        airline: "British Airways",
-        route: `${from}-${to}`,
-        cabin: travelClass,
-        cash_price: 175.0,
-      },
-      {
-        airline: "Swiss",
-        route: `${from}-${to}`,
-        cabin: travelClass,
-        cash_price: 205.0,
-      },
+      { airline: "Lufthansa", route: `${from}-${to}`, cabin: travelClass, cash_price: 189 },
+      { airline: "British Airways", route: `${from}-${to}`, cabin: travelClass, cash_price: 175 },
+      { airline: "Swiss", route: `${from}-${to}`, cabin: travelClass, cash_price: 205 },
     ];
 
-    // 🧠 Analyze results with your OpenAI logic (optional)
-    let results;
-    try {
-      results = await analyzeWithOpenAI(flights, travelClass);
-    } catch (aiError) {
-      console.error("OpenAI analysis failed, falling back to mock data:", aiError.message);
-      results = flights;
-    }
+    // For each flight, find best loyalty program option
+    const results = flights.map((f) => {
+      const options = amexTransferPrograms.map((p) => {
+        const euroPerMile = p.value_eur;
+        const requiredMiles = Math.round(f.cash_price / euroPerMile);
+        const requiredAmexPoints = Math.round(requiredMiles * p.ratio);
 
-    // ✅ Return JSON response
+        return {
+          name: p.program,
+          ratio: `${Math.round(p.ratio * 100) / 100}:1`,
+          required_points: requiredAmexPoints,
+          taxes: 95,
+          effective_value: f.cash_price / requiredAmexPoints, // €/point
+        };
+      });
+
+      // Sort best (lowest effective_value)
+      const best = options.sort((a, b) => b.effective_value - a.effective_value)[0];
+
+      return {
+        ...f,
+        best_program: best,
+        recommendation: `Best value via ${best.name} (${best.ratio}) – ` +
+          `${best.required_points.toLocaleString()} points + €${best.taxes} taxes`,
+      };
+    });
+
     res.json(results);
   } catch (err) {
     console.error("❌ Flight agent route error:", err);
