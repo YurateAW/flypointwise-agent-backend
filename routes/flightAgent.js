@@ -20,18 +20,20 @@ router.post("/", async (req, res) => {
     // For each flight, find best loyalty program option
     const results = flights.map((f) => {
       const options = amexTransferPrograms.map((p) => {
-        const euroPerMile = p.value_eur;
-        const requiredMiles = Math.round(f.cash_price / euroPerMile);
-        const requiredAmexPoints = Math.round(requiredMiles * p.ratio);
-
-        return {
-          name: p.program,
-          ratio: `${Math.round(p.ratio * 100) / 100}:1`,
-          required_points: requiredAmexPoints,
-          taxes: 95,
-          effective_value: f.cash_price / requiredAmexPoints, // €/point
-        };
-      });
+      const euroPerMile = Number(p.value_eur) || 0.012;        // default value
+      const ratio = Number(p.ratio) || 1;                      // ensure numeric
+      const requiredMiles = Math.round(f.cash_price / euroPerMile);
+      const requiredAmexPoints = Math.round(requiredMiles * ratio);
+      const effectiveValue = requiredAmexPoints > 0 ? (f.cash_price / requiredAmexPoints) : 0;
+    
+      return {
+        name: p.program,
+        ratio_display: `${(ratio).toFixed(2)}:1`,
+        required_points: requiredAmexPoints,
+        taxes: 95,
+        effective_value: effectiveValue,
+      };
+    });
 
       // Sort best (lowest effective_value)
       const best = options.sort((a, b) => b.effective_value - a.effective_value)[0];
