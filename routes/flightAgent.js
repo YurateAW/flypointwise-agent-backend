@@ -77,12 +77,21 @@ router.post("/", async (req, res) => {
 
     res.json(top10);
   } catch (err) {
-    console.error("❌ Amadeus API error:", err.response?.result || err);
+    console.error("❌ Amadeus API error (full):", JSON.stringify(err, null, 2));
+
+    const result =
+      err?.response?.result ||
+      err?.response?.data ||
+      err?.description ||
+      err?.message ||
+      "Unknown error";
+
     res.status(500).json({
       error: "Failed to fetch flights from Amadeus",
-      details: err.response?.result || err.message,
+      details: result,
     });
   }
 });
+
 
 export default router;
